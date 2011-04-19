@@ -56,6 +56,7 @@ Phantom::Phantom(QObject *parent)
     , m_returnValue(0)
     , m_converter(0)
     , m_netAccessMan(0)
+    , m_finishSlotLinked(true)
 {
     QPalette palette = m_page.palette();
     palette.setBrush(QPalette::Base, Qt::transparent);
@@ -164,6 +165,14 @@ Phantom::Phantom(QObject *parent)
 
     m_page.settings()->setAttribute(QWebSettings::LocalStorageDatabaseEnabled, true);
 
+    m_page.settings()->setAttribute(QWebSettings::XSSAuditingEnabled, false);
+    m_page.settings()->setAttribute(QWebSettings::LocalContentCanAccessRemoteUrls, true);
+    m_page.settings()->setAttribute(QWebSettings::LocalContentCanAccessFileUrls, true);
+
+    QWebSettings::globalSettings()->setAttribute(QWebSettings::XSSAuditingEnabled, false);
+    QWebSettings::globalSettings()->setAttribute(QWebSettings::LocalContentCanAccessRemoteUrls, true);
+    QWebSettings::globalSettings()->setAttribute(QWebSettings::LocalContentCanAccessFileUrls, true);
+    
 #if QT_VERSION >= QT_VERSION_CHECK(4, 7, 0)
     m_page.settings()->setAttribute(QWebSettings::FrameFlatteningEnabled, true);
 #endif
@@ -178,6 +187,11 @@ Phantom::Phantom(QObject *parent)
 
     m_page.mainFrame()->setScrollBarPolicy(Qt::Horizontal, Qt::ScrollBarAlwaysOff);
     m_page.mainFrame()->setScrollBarPolicy(Qt::Vertical, Qt::ScrollBarAlwaysOff);
+
+    QWebSecurityOrigin ori = m_page.mainFrame()->securityOrigin();
+    QWebSecurityOrigin::addLocalScheme(QString::fromAscii("http"));
+    QWebSecurityOrigin::addLocalScheme(QString::fromAscii("https"));
+    //ori.addLocalScheme(QString::fromAscii("https"));
 }
 
 QStringList Phantom::args() const
@@ -325,6 +339,20 @@ void Phantom::open(const QString &address)
     m_page.triggerAction(QWebPage::Stop);
     m_loadStatus = "loading";
     m_page.mainFrame()->load(address);
+    QWebSecurityOrigin ori = m_page.mainFrame()->securityOrigin();
+}
+
+void Phantom::linkLoadedSlot()
+{
+    qDebug() << "Linking loaded slot to the ::finish function...";
+    m_finishSlotLinked = true;
+    //connect(&m_page, SIGNAL(loadFinished(bool)), this, SLOT(finish(bool)));
+}
+
+void Phantom::unlinkLoadedSlot()
+{
+    qDebug() << "Unlinking loaded slot to the ::finish function...";
+    m_finishSlotLinked = false;
 }
 
 bool Phantom::render(const QString &fileName)
@@ -399,7 +427,10 @@ void Phantom::setFormInputFile(QWebElement el, const QString &fileTag)
 void Phantom::finish(bool success)
 {
     m_loadStatus = success ? "success" : "fail";
-    m_page.mainFrame()->evaluateJavaScript(m_script);
+    qDebug() << "Phantom::finish:" << m_page.mainFrame()->url().toString() << ", " << m_loadStatus;
+    if (m_finishSlotLinked) {
+      m_page.mainFrame()->evaluateJavaScript(m_script);
+    }
 }
 
 void Phantom::inject()
@@ -430,6 +461,7 @@ bool Phantom::renderPdf(const QString &fileName)
         const QPrinter::Orientation orientation = paperSize.contains("orientation")
                 && paperSize.value("orientation").toString().compare("landscape", Qt::CaseInsensitive) == 0 ?
                     QPrinter::Landscape : QPrinter::Portrait;
+        //
         printer.setOrientation(orientation);
         static const struct {
             QString format;

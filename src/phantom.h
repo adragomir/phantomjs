@@ -83,6 +83,8 @@ public:
 public slots:
     void exit(int code = 0);
     void open(const QString &address);
+    void linkLoadedSlot();
+    void unlinkLoadedSlot();
 
     // moc does not understand QT_VERSION_CHECK and hence the encoded hex
 #if QT_VERSION >= 0x040600
@@ -112,6 +114,7 @@ private:
     QVariantMap m_paperSize; // For PDF output via render()
     QRect m_clipRect;
     NetworkAccessManager *m_netAccessMan;
+    bool m_finishSlotLinked;
 };
 
 #endif // PHANTOM_H
